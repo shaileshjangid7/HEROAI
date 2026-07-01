@@ -63,7 +63,7 @@ st.markdown(
 )
 
 # ==========================================================
-# 2. BRANDING HEADER (Dynamic Hero Logo & Typography)
+# 2. BRANDING HEADER (Dynamic Hero Typography)
 # ==========================================================
 st.markdown(
     """
@@ -106,12 +106,13 @@ if "robo" not in st.session_state:
         "4. Reject unrelated non-automotive/non-engineering queries firmly but professionally."
     )
     
-    # Priming conversation history to bypass structural config bugs
+    # FIXED: Seed the chat memory directly to bypass the buggy config system_instruction block
     priming_history = [
         types.Content(role="user", parts=[types.Part(text=automotive_persona)]),
         types.Content(role="model", parts=[types.Part(text="R&D Dynamics Core Active. System rules accepted. Standing by for chassis calculations, engine mapping, and validation arrays.")])
     ]
     
+    # Initialize chat using the pre-seeded history array
     st.session_state.mychat = st.session_state.robo.chats.create(
         model="gemini-2.5-flash", 
         history=priming_history
@@ -122,7 +123,6 @@ if "robo" not in st.session_state:
 # 4. INTERACTIVE SIDEBAR & TELEMETRY MODULE
 # ==========================================================
 with st.sidebar:
-    # Safe Logo Rendering: Only loads if the user placed the image in assets folder
     if os.path.exists("assets/hero_logo.png"):
         st.image("assets/hero_logo.png", use_container_width=True)
     else:
@@ -140,7 +140,6 @@ with st.sidebar:
         st.write("Brake Power Formulation:")
         st.latex(r"P = \frac{2 \pi N T}{60,000}")
         
-        # Plotting a high-fidelity dynamic Plotly curve
         rpm = np.linspace(1000, 9500, 100)
         torque = 18 * np.sin(rpm / 3500) + 14 - (rpm / 1500)**1.2
         df = pd.DataFrame({"Engine RPM": rpm, "Torque (Nm)": torque})
