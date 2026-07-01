@@ -3,11 +3,19 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
+
+# ==========================================================
+# 1. SECURITY CONTROL (Must run BEFORE importing google SDK)
+# ==========================================================
+# Force your key into the environment memory to fix the 401 OAuth token bug
+if "GOOGLE_API_KEY" in st.secrets:
+    os.environ["GEMINI_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+
 from google import genai
 from google.genai import types
 
 # ==========================================================
-# 1. PREMIUM UI & PAGE CONFIGURATION
+# 2. PREMIUM UI & PAGE CONFIGURATION
 # ==========================================================
 st.set_page_config(
     page_title="HERO R&D - 2-Wheeler Engineering Copilot",
@@ -62,9 +70,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ==========================================================
-# 2. BRANDING HEADER (Dynamic Hero Typography)
-# ==========================================================
+# Branding Header Bar
 st.markdown(
     """
     <div class="hero-header">
@@ -85,39 +91,25 @@ st.markdown(
 )
 
 # ==========================================================
-# 3. SECURE ENGINE INITIALIZATION & SYSTEM PRIMING
+# 3. ENGINE INITIALIZATION (Locked in Session Memory)
 # ==========================================================
 if "robo" not in st.session_state:
-    # Initialize connection via production v1 pipeline to fully support new AQ keys
-    st.session_state.robo = genai.Client(
-        api_key=st.secrets["GOOGLE_API_KEY"],
-        http_options=types.HttpOptions(api_version="v1")
-    )
-    
-    # Technical Knowledge Engineering Restrictions
-    automotive_persona = (
-        "You are the Principal Simulation and Design Engineer at Hero MotoCorp R&D. "
-        "Your core intellectual focus is exclusively two-wheeler dynamics, powertrain engineering, "
-        "chassis topology, aerodynamics, and advanced structural mechanics.\n\n"
-        "Strict Boundaries:\n"
-        "1. Focus purely on motorcycles, scooters, and performance EV bikes.\n"
-        "2. Present engineering data utilizing Markdown Tables for structured parameters.\n"
-        "3. Incorporate LaTeX equations when presenting fluid formulas, torque transitions, or stress profiles.\n"
-        "4. Reject unrelated non-automotive/non-engineering queries firmly but professionally."
-    )
-    
-    # FIXED: Seed the chat memory directly to bypass the buggy config system_instruction block
-    priming_history = [
-        types.Content(role="user", parts=[types.Part(text=automotive_persona)]),
-        types.Content(role="model", parts=[types.Part(text="R&D Dynamics Core Active. System rules accepted. Standing by for chassis calculations, engine mapping, and validation arrays.")])
-    ]
-    
-    # Initialize chat using the pre-seeded history array
-    st.session_state.mychat = st.session_state.robo.chats.create(
-        model="gemini-2.5-flash", 
-        history=priming_history
-    )
+    # Initializing blank forces the SDK to securely pull the environment key 
+    # we injected at the top, bypassing argument parsing bugs.
+    st.session_state.robo = genai.Client()
     st.session_state.messages = []
+
+# Technical Knowledge System Instructions
+automotive_persona = (
+    "You are the Principal Simulation and Design Engineer at Hero MotoCorp R&D. "
+    "Your core focus is exclusively two-wheeler dynamics, powertrain engineering, "
+    "chassis topology, aerodynamics, and advanced structural mechanics.\n\n"
+    "Strict Boundaries:\n"
+    "1. Focus purely on motorcycles, scooters, and performance EV bikes.\n"
+    "2. Present engineering data utilizing Markdown Tables for structured parameters.\n"
+    "3. Incorporate LaTeX equations when presenting fluid formulas, torque transitions, or stress profiles.\n"
+    "4. Reject unrelated non-automotive/non-engineering queries firmly but professionally."
+)
 
 # ==========================================================
 # 4. INTERACTIVE SIDEBAR & TELEMETRY MODULE
@@ -133,7 +125,7 @@ with st.sidebar:
     
     tool_select = st.selectbox(
         "Select Active Telemetry View", 
-        ["Powertrain Torque Curve", "Suspension Ride Dynamics", "Aerodynamic Drag Coefficient"]
+        ["Powertrain Torque Curve", "Suspension Ride Dynamics"]
     )
     
     if tool_select == "Powertrain Torque Curve":
@@ -156,23 +148,42 @@ tab1, tab2 = st.tabs(["🌐 R&D Engineering Copilot", "📊 Baseline Parameter M
 with tab1:
     st.caption("Perform stress distribution checks, geometry modifications, or thermal management planning:")
     
-    # Render scrollable interactive history layout
+    # Render historical chat log items from page refresh state
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Anchor sticky conversational prompt input bar
+    # Anchor standard chat input interface
     if question := st.chat_input("Ask about trellis frame triangulation, trail configuration, or rake adjustments..."):
         with st.chat_message("user"):
             st.markdown(question)
         st.session_state.messages.append({"role": "user", "content": question})
 
+        # BUILD THE MESSAGE HISTORY PAYLOAD MANUALLY FOR THE MODEL
+        contents_payload = []
+        for msg in st.session_state.messages:
+            # Map roles to match Google's native API layout rules ('user' and 'model')
+            api_role = "user" if msg["role"] == "user" else "model"
+            contents_payload.append(
+                types.Content(role=api_role, parts=[types.Part(text=msg["content"])])
+            )
+
+        # Run direct content generation safely on default pipeline setup
         with st.chat_message("assistant"):
             with st.spinner("Processing dynamic engine simulation arrays..."):
-                response = st.session_state.mychat.send_message(question)
-                st.markdown(response.text)
-                
-        st.session_state.messages.append({"role": "assistant", "content": response.text})
+                try:
+                    response = st.session_state.robo.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=contents_payload,
+                        config=types.GenerateContentConfig(
+                            system_instruction=automotive_persona,
+                            temperature=0.15
+                        )
+                    )
+                    st.markdown(response.text)
+                    st.session_state.messages.append({"role": "assistant", "content": response.text})
+                except Exception as error_context:
+                    st.error(f"Core Interface Connection Error: {error_context}")
 
 with tab2:
     st.subheader("📋 Structural Geometry Benchmarks")
